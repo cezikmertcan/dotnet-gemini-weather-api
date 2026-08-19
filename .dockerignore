@@ -1,0 +1,12 @@
+.git
+.vs
+.idea
+bin
+obj
+TestResults
+.env
+.env.*
+!.env.example
+docker-data
+*.user
+*.suo
