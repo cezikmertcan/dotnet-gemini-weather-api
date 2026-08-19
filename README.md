@@ -1,54 +1,75 @@
 # Gemini Weather API
 
-A small, production-minded .NET 10 Web API sample that accepts a weather question, fetches live weather data, asks Google Gemini for a structured interpretation, and stores the result for authenticated users.
+A production-minded .NET 10 Web API sample that combines live weather measurements with a structured Google Gemini response.
 
-This repository is intentionally focused: it demonstrates a practical AI integration without pretending that an LLM is the source of truth for live measurements.
+The project is intentionally small and explainable: Open-Meteo remains the source of truth for measurements, Gemini turns those measurements into a constrained answer, Redis reduces repeated upstream calls, and PostgreSQL stores authenticated request history.
 
-## What it demonstrates
+## What this demonstrates
 
 - ASP.NET Core Web API targeting .NET 10
 - JWT registration and login with PBKDF2 password hashing
 - PostgreSQL persistence through Entity Framework Core and Npgsql
-- Redis caching with a ten-minute weather brief cache
-- Google Gemini REST integration with JSON response schema enforcement
-- Open-Meteo geocoding and current weather data
+- Redis caching with a ten-minute weather-brief cache
+- Google Gemini REST integration with JSON response-schema enforcement
+- Open-Meteo geocoding and current-weather data
 - Per-user request history
-- Problem Details error responses
-- Fixed-window rate limiting on the AI endpoint
-- Health and OpenAPI endpoints
-- Dockerfile and Docker Compose for local infrastructure
-- Unit tests for upstream JSON parsing and cache-key isolation
+- RFC 7807-style Problem Details errors
+- IP-based rate limiting for authentication and AI requests
+- Liveness and database-readiness health checks
+- OpenAPI JSON, Swagger UI, and an English interactive landing page
+- Cross-platform local development with Docker Compose
+- Multi-stage, non-root Docker image
+- Unit tests and a CI pipeline that builds the container image
 
-## Architecture
+## Request flow
 
-`POST /api/weather/brief`
-→ authenticate user
-→ look up live weather with Open-Meteo
-→ build a constrained prompt
-→ request JSON from Gemini
-→ cache the typed result in Redis
-→ persist the request and result in PostgreSQL
-→ return a stable API response
+```text
+POST /api/weather/brief
+        │
+        ├─ authenticate the user with JWT
+        ├─ check the user-scoped Redis cache
+        ├─ geocode the city with Open-Meteo
+        ├─ fetch current measurements from Open-Meteo
+        ├─ ask Gemini for a constrained JSON answer
+        ├─ cache the typed response for ten minutes
+        ├─ persist the request and result in PostgreSQL
+        └─ return a stable API response
+```
 
-The API never stores the Gemini API key in source code. Local secrets belong in `.env`, which is ignored by Git.
+Redis is treated as an optimization rather than a source of truth. If Redis is temporarily unavailable, a live request can still complete and the API logs the cache failure.
+
+## API surface
+
+| Method | Route | Auth | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/register` | Public | Create a user and return a JWT |
+| `POST` | `/api/auth/login` | Public | Authenticate a user and return a JWT |
+| `POST` | `/api/weather/brief` | Bearer JWT | Generate a structured weather brief |
+| `GET` | `/api/history?limit=20` | Bearer JWT | Read the current user’s latest requests |
+| `GET` | `/health/live` | Public | Confirm that the process is running |
+| `GET` | `/health/ready` | Public | Check PostgreSQL readiness |
+| `GET` | `/swagger` | Public | Explore and execute the API interactively |
+| `GET` | `/openapi/v1.json` | Public | Download the OpenAPI document |
+
+The interactive root page at `/` explains the architecture and includes a small same-origin client for registration, login, weather requests, and history.
 
 ## Requirements
 
 - .NET 10 SDK
 - Docker Desktop with Docker Compose
-- A Gemini API key for live weather analysis
+- A Gemini API key for live analysis
 
-The API itself is cross-platform: macOS, Windows, and Linux are supported by the .NET runtime. PostgreSQL and Redis run in Docker so the local setup is the same on each operating system.
+The application runs on macOS, Windows, and Linux. PostgreSQL and Redis run in Docker so local infrastructure is consistent across operating systems.
 
 ## Quick start
 
 1. Copy the environment template:
 
-```text
+```bash
 cp .env.example .env
 ```
 
-On Windows PowerShell, use:
+On Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
@@ -62,26 +83,27 @@ GEMINI_API_KEY=your-real-key
 
 3. Start PostgreSQL and Redis:
 
-```text
+```bash
 docker compose up -d
 ```
 
 4. Start the API:
 
-```text
+```bash
 dotnet run --project src/GeminiWeatherApi --urls http://localhost:5050
 ```
 
-The first start applies the EF Core database migration automatically.
+The first start applies the checked-in EF Core migration automatically.
 
-- Landing page: http://localhost:5050/
-- Interactive Swagger UI: http://localhost:5050/swagger
+Open:
 
-- OpenAPI document: http://localhost:5050/openapi/v1.json
-- Liveness: http://localhost:5050/health/live
-- Readiness: http://localhost:5050/health/ready
+- Landing page: <http://localhost:5050/>
+- Swagger UI: <http://localhost:5050/swagger>
+- OpenAPI JSON: <http://localhost:5050/openapi/v1.json>
+- Liveness: <http://localhost:5050/health/live>
+- Readiness: <http://localhost:5050/health/ready>
 
-In Swagger UI, call register or login first, copy the returned `accessToken`, click `Authorize`, and paste the token. Then the protected weather and history routes can be tested with **Try it out**.
+In Swagger, register or log in first, copy the returned `accessToken`, choose **Authorize**, and paste the token. Protected weather and history routes can then be executed with **Try it out**.
 
 ## API walkthrough
 
@@ -112,7 +134,7 @@ curl -X POST http://localhost:5050/api/weather/brief \
   -d '{"city":"Istanbul","question":"Do I need a jacket and an umbrella today?"}'
 ```
 
-Read the user's latest records:
+Read the authenticated user’s history:
 
 ```bash
 curl "http://localhost:5050/api/history?limit=20" \
@@ -121,80 +143,100 @@ curl "http://localhost:5050/api/history?limit=20" \
 
 ## Configuration
 
-| Variable | Purpose | Example |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | Gemini authentication | local secret |
-| `GEMINI_MODEL` | Configurable Gemini model | `gemini-3.7-flash` |
-| `JWT_SIGNING_KEY` | Local token signing key, 32+ chars | local secret |
-| `DATABASE_CONNECTION` | PostgreSQL connection string | `Host=localhost;Port=5432;...` |
-| `REDIS_CONNECTION` | Redis endpoint | `localhost:6379` |
+Environment variables override `appsettings.json`. `.env` is loaded for local development only and is ignored by Git.
 
-Do not commit `.env`, production keys, database passwords, or JWT signing keys.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | Always | Gemini authentication secret |
+| `GEMINI_MODEL` | No | Gemini model name; defaults to `gemini-3.7-flash` |
+| `JWT_SIGNING_KEY` | Production | JWT signing key; must contain at least 32 characters |
+| `JWT_ISSUER` | No | JWT issuer; defaults to `GeminiWeatherApi` |
+| `JWT_AUDIENCE` | No | JWT audience; defaults to `GeminiWeatherApi.Client` |
+| `JWT_ACCESS_TOKEN_MINUTES` | No | Token lifetime from 5 to 1440 minutes |
+| `DATABASE_CONNECTION` | Production | PostgreSQL/Npgsql connection string |
+| `REDIS_CONNECTION` | Production | Redis connection string |
+| `POSTGRES_DB` | Local Compose | PostgreSQL database name |
+| `POSTGRES_USER` | Local Compose | PostgreSQL username |
+| `POSTGRES_PASSWORD` | Local Compose | Local PostgreSQL password |
+
+Outside the `Development` environment, the application fails fast when `DATABASE_CONNECTION`, `REDIS_CONNECTION`, or `JWT_SIGNING_KEY` is missing. Use a platform secret manager or environment settings for deployed values.
+
+## Docker
+
+Build the production image:
+
+```bash
+docker build --tag gemini-weather-api:local .
+```
+
+The image listens on port `8080` and runs as a non-root user. It contains only the API; PostgreSQL and Redis should be provided by managed services or separate private containers in a deployment environment.
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for container, managed-database, and platform guidance.
 
 ## Data and caching
 
-Every successful weather brief creates an `AiRequestRecord` for the authenticated user. The record contains the normalized topic, city, model, cache status, response JSON, duration, and timestamp.
+Every successful weather brief creates an `AiRequestRecord` for the authenticated user. Records contain the topic, city, prompt, model, cache status, response JSON, duration, and timestamp.
 
-Redis keys are scoped by user, city, question, and model. A cache hit still creates a history record, so the history endpoint represents user activity rather than only upstream Gemini calls.
+Redis keys are scoped by user, city, question, and model. A cache hit still creates a history record, so history represents user activity rather than only Gemini calls.
 
-The current weather cache lasts ten minutes. This is a demo policy, not a guarantee that weather data is fresh enough for emergency decisions.
+The ten-minute cache is a demo policy. It is not a guarantee that weather data is fresh enough for emergency or safety-critical decisions.
 
-## Upstream response safety
+## Reliability and safety behavior
 
-Gemini is asked for a JSON object with a fixed schema. The response parser:
+- Gemini output is parsed as JSON and normalized before it is returned.
+- Provider response bodies are intentionally omitted from logs to avoid leaking upstream content.
+- Open-Meteo and Gemini timeouts are mapped to explicit gateway errors.
+- Authentication is limited to 10 observed client-IP requests per minute.
+- Weather/Gemini requests are limited to 20 observed client-IP requests per minute.
+- Health checks distinguish process liveness from PostgreSQL readiness.
+- Production configuration does not silently fall back to local database, Redis, or JWT values.
 
-- extracts the first JSON object if the provider adds surrounding text
-- removes Markdown fences
-- validates that a summary exists
-- limits recommendation and safety-note array sizes
-- returns a generic upstream error without logging the provider response body
+## Testing and CI
 
-The prompt tells Gemini to use only the live measurements supplied by Open-Meteo. For safety-critical decisions, use an official weather warning service instead of this demo.
+Run the solution tests:
 
-## Local development
-
-Run tests:
-
-```text
-dotnet test GeminiWeatherApi.sln
+```bash
+dotnet test GeminiWeatherApi.sln --configuration Release
 ```
 
-Build:
+Build the solution:
 
-```text
-dotnet build GeminiWeatherApi.sln
+```bash
+dotnet build GeminiWeatherApi.sln --configuration Release
 ```
+
+The GitHub Actions workflow restores, builds, tests, and builds the Docker image. Dependabot is configured for NuGet packages and GitHub Actions.
+
+## Local cleanup
 
 Stop local infrastructure:
 
-```text
+```bash
 docker compose down
 ```
 
-To remove local PostgreSQL and Redis data as well, use `docker compose down -v`. This deletes only the named volumes for this project.
+To remove this project’s local PostgreSQL and Redis volumes as well:
 
-## Docker image
-
-The included Dockerfile creates a small ASP.NET runtime image:
-
-```text
-docker build -t gemini-weather-api .
+```bash
+docker compose down -v
 ```
 
-For a containerized API, provide environment variables appropriate for the network where PostgreSQL and Redis are running. The checked-in Compose file intentionally runs only the dependencies so the API can still be debugged directly with the local .NET SDK.
+This removes only the named volumes declared by this Compose project.
 
-## Before publishing this repository
+## Public-demo limitations
 
-- Replace every placeholder in `.env.example` with non-secret documentation values only.
-- Confirm `.env` is ignored and no key appears in Git history.
-- Set a real repository description and topics on GitHub.
-- Enable secret scanning and Dependabot alerts.
-- Replace development database credentials in any deployed environment.
-- Put the API behind HTTPS and a reverse proxy.
-- Rotate JWT signing keys using a secret manager.
+This is an educational integration sample, not a complete production security baseline. Before handling real users or sensitive data, add account lockout, email verification, refresh-token rotation or revocation, a retention policy, structured audit logging, centralized secret management, distributed rate limiting, backups, and a documented incident process.
 
-## License
+The Gemini free tier and upstream API limits are external to this repository. A public deployment should enforce quotas and monitor usage so an exposed endpoint cannot consume the project’s entire allowance.
 
-MIT. See [LICENSE](LICENSE).
+## Contributing and security
 
-Open-Meteo and Gemini usage notes are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local workflow and pull-request expectations. See [SECURITY.md](SECURITY.md) for vulnerability reporting guidance.
+
+Do not commit `.env`, production keys, database passwords, JWT signing keys, or personal data. Rotate any credential that has ever been exposed.
+
+## License and third-party services
+
+This project is released under the MIT License; see [LICENSE](LICENSE).
+
+Gemini and Open-Meteo usage notes are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Review their current terms, attribution requirements, model availability, and billing policies before deploying publicly.
