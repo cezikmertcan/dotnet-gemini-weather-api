@@ -14,6 +14,8 @@ public sealed class HistoryController(IWeatherBriefService weatherBriefService) 
 {
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<HistoryItem>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<IReadOnlyList<HistoryItem>>> GetHistory(
         [FromQuery, Range(1, 50)] int limit = 20,
         CancellationToken cancellationToken = default)

@@ -15,7 +15,10 @@ public sealed class WeatherController(IWeatherBriefService weatherBriefService) 
 {
     [HttpPost("brief")]
     [ProducesResponseType(typeof(WeatherBriefResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(StatusCodes.Status504GatewayTimeout)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<WeatherBriefResponse>> CreateBrief(
         WeatherBriefRequest request,

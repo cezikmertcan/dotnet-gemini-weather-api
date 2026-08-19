@@ -7,6 +7,7 @@ using GeminiWeatherApi.Options;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 namespace GeminiWeatherApi.Services;
 
@@ -39,7 +40,18 @@ public sealed class WeatherBriefService(
             geminiOptions.Value.Model);
         var stopwatch = Stopwatch.StartNew();
 
-        var cachedJson = await cache.GetStringAsync(cacheKey, cancellationToken);
+        string? cachedJson = null;
+        try
+        {
+            cachedJson = await cache.GetStringAsync(cacheKey, cancellationToken);
+        }
+        catch (RedisException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Redis cache read failed for user {UserId}; continuing without cache.",
+                userId);
+        }
         if (!string.IsNullOrWhiteSpace(cachedJson))
         {
             try
@@ -85,14 +97,24 @@ public sealed class WeatherBriefService(
             model,
             DateTimeOffset.UtcNow);
 
-        await cache.SetStringAsync(
-            cacheKey,
-            JsonSerializer.Serialize(cacheEntry, JsonOptions),
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
-            },
-            cancellationToken);
+        try
+        {
+            await cache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(cacheEntry, JsonOptions),
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+                },
+                cancellationToken);
+        }
+        catch (RedisException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Redis cache write failed for user {UserId}; returning the live response.",
+                userId);
+        }
 
         return await SaveRecordAsync(
             userId,

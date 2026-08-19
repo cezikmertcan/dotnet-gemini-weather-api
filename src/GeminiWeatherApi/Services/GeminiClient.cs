@@ -67,40 +67,61 @@ public sealed class GeminiClient(
             }
         };
 
-        using var response = await httpClient.PostAsJsonAsync(
-            endpoint,
-            payload,
-            JsonOptions,
-            cancellationToken);
-
-        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            logger.LogWarning(
-                "Gemini returned HTTP {StatusCode}; response body intentionally omitted.",
-                (int)response.StatusCode);
+            using var response = await httpClient.PostAsJsonAsync(
+                endpoint,
+                payload,
+                JsonOptions,
+                cancellationToken);
 
-            var detail = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
-                ? "Gemini rate limit reached. Please retry later."
-                : "Gemini could not complete the analysis.";
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Gemini returned HTTP {StatusCode}; response body intentionally omitted.",
+                    (int)response.StatusCode);
 
+                var detail = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                    ? "Gemini rate limit reached. Please retry later."
+                    : "Gemini could not complete the analysis.";
+
+                throw new ApiException(
+                    StatusCodes.Status502BadGateway,
+                    "Gemini request failed",
+                    detail,
+                    "gemini_request_failed");
+            }
+
+            var upstream = JsonSerializer.Deserialize<GeminiGenerateContentResponse>(
+                responseBody,
+                JsonOptions);
+
+            var generatedText = upstream?.Candidates?
+                .SelectMany(candidate => candidate.Content?.Parts ?? Enumerable.Empty<GeminiPart>())
+                .Select(part => part.Text)
+                .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+
+            return GeminiResponseParser.Parse(generatedText ?? string.Empty);
+        }
+        catch (HttpRequestException exception)
+        {
+            logger.LogWarning(exception, "Gemini request could not reach the provider.");
             throw new ApiException(
                 StatusCodes.Status502BadGateway,
-                "Gemini request failed",
-                detail,
-                "gemini_request_failed");
+                "Gemini unavailable",
+                "Gemini could not be reached right now.",
+                "gemini_provider_unavailable");
         }
-
-        var upstream = JsonSerializer.Deserialize<GeminiGenerateContentResponse>(
-            responseBody,
-            JsonOptions);
-
-        var generatedText = upstream?.Candidates?
-            .SelectMany(candidate => candidate.Content?.Parts ?? Enumerable.Empty<GeminiPart>())
-            .Select(part => part.Text)
-            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
-
-        return GeminiResponseParser.Parse(generatedText ?? string.Empty);
+        catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(exception, "Gemini request timed out.");
+            throw new ApiException(
+                StatusCodes.Status504GatewayTimeout,
+                "Gemini timeout",
+                "Gemini did not respond in time.",
+                "gemini_provider_timeout");
+        }
     }
 
     private sealed class GeminiGenerateContentResponse
