@@ -1,5 +1,9 @@
 # Gemini Weather API
 
+[![CI](https://github.com/cezikmertcan/dotnet-gemini-weather-api/actions/workflows/ci.yml/badge.svg)](https://github.com/cezikmertcan/dotnet-gemini-weather-api/actions/workflows/ci.yml)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A production-minded .NET 10 Web API sample that combines live weather measurements with a structured Google Gemini response.
 
 The project is intentionally small and explainable: Open-Meteo remains the source of truth for measurements, Gemini turns those measurements into a constrained answer, Redis reduces repeated upstream calls, and PostgreSQL stores authenticated request history.
