@@ -1,11 +1,13 @@
 using System.Text;
 using GeminiWeatherApi.Data;
+using GeminiWeatherApi.Data.Entities;
 using GeminiWeatherApi.Infrastructure;
 using GeminiWeatherApi.Options;
 using GeminiWeatherApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 
 var envFile = Path.Combine(Directory.GetCurrentDirectory(), ".env");
