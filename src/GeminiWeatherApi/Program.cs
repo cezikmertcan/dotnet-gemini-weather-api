@@ -10,11 +10,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 
-var envFile = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-if (File.Exists(envFile))
-{
-    DotNetEnv.Env.Load(envFile);
-}
+// dotnet run --project can use the project folder as the working directory;
+// TraversePath also finds a developer's .env in the repository root.
+DotNetEnv.Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
