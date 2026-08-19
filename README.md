@@ -74,9 +74,14 @@ dotnet run --project src/GeminiWeatherApi --urls http://localhost:5050
 
 The first start applies the EF Core database migration automatically.
 
+- Landing page: http://localhost:5050/
+- Interactive Swagger UI: http://localhost:5050/swagger
+
 - OpenAPI document: http://localhost:5050/openapi/v1.json
 - Liveness: http://localhost:5050/health/live
 - Readiness: http://localhost:5050/health/ready
+
+In Swagger UI, call register or login first, copy the returned `accessToken`, click `Authorize`, and paste the token. Then the protected weather and history routes can be tested with **Try it out**.
 
 ## API walkthrough
 
@@ -193,4 +198,3 @@ For a containerized API, provide environment variables appropriate for the netwo
 MIT. See [LICENSE](LICENSE).
 
 Open-Meteo and Gemini usage notes are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
