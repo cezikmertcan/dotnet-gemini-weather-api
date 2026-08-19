@@ -13,6 +13,7 @@ namespace GeminiWeatherApi.Controllers;
 [Route("api/weather")]
 public sealed class WeatherController(IWeatherBriefService weatherBriefService) : ControllerBase
 {
+    /// <summary>Combines live Open-Meteo measurements with a structured Gemini analysis.</summary>
     [HttpPost("brief")]
     [ProducesResponseType(typeof(WeatherBriefResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

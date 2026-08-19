@@ -1,9 +1,9 @@
 .git
-.vs
-.idea
-bin
-obj
-TestResults
+**/.vs
+**/.idea
+**/bin
+**/obj
+**/TestResults
 .env
 .env.*
 !.env.example

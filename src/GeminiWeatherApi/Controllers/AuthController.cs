@@ -10,6 +10,7 @@ namespace GeminiWeatherApi.Controllers;
 [Route("api/auth")]
 public sealed class AuthController(IAuthService authService) : ControllerBase
 {
+    /// <summary>Creates a user account and returns a JWT access token.</summary>
     [HttpPost("register")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -21,6 +22,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         return Ok(await authService.RegisterAsync(request, cancellationToken));
     }
 
+    /// <summary>Authenticates an existing user and returns a JWT access token.</summary>
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

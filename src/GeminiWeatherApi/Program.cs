@@ -1,5 +1,6 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using System.Reflection;
 using GeminiWeatherApi.Data;
 using GeminiWeatherApi.Data.Entities;
 using GeminiWeatherApi.Infrastructure;
@@ -153,6 +154,13 @@ builder.Services.AddSwaggerGen(options =>
     {
         [new OpenApiSecuritySchemeReference("bearer", document)] = []
     });
+    var xmlCommentsPath = Path.Combine(
+        AppContext.BaseDirectory,
+        $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
+    if (File.Exists(xmlCommentsPath))
+    {
+        options.IncludeXmlComments(xmlCommentsPath);
+    }
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

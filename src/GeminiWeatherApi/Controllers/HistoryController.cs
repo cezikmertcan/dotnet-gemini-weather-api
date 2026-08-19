@@ -12,6 +12,7 @@ namespace GeminiWeatherApi.Controllers;
 [Route("api/history")]
 public sealed class HistoryController(IWeatherBriefService weatherBriefService) : ControllerBase
 {
+    /// <summary>Returns the latest saved weather requests for the authenticated user.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<HistoryItem>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
