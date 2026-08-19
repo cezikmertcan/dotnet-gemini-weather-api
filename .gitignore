@@ -1,0 +1,17 @@
+.vs/
+.idea/
+bin/
+obj/
+TestResults/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.user
+*.suo
+*.db
+*.db-shm
+*.db-wal
+*.log
+coverage/
+docker-data/
