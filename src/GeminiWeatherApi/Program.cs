@@ -17,21 +17,31 @@ DotNetEnv.Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
+var isDevelopment = builder.Environment.IsDevelopment();
 
 var databaseConnection =
     builder.Configuration["DATABASE_CONNECTION"]
     ?? builder.Configuration.GetConnectionString("Database")
-    ?? "Host=localhost;Port=5432;Database=gemini_weather;Username=gemini_weather;Password=local-dev-only";
+    ?? (isDevelopment
+        ? "Host=localhost;Port=5432;Database=gemini_weather;Username=gemini_weather;Password=local-dev-only"
+        : throw new InvalidOperationException(
+            "DATABASE_CONNECTION must be configured outside the Development environment."));
 
 var redisConnection =
     builder.Configuration["REDIS_CONNECTION"]
     ?? builder.Configuration["ConnectionStrings:Redis"]
-    ?? "localhost:6379";
+    ?? (isDevelopment
+        ? "localhost:6379"
+        : throw new InvalidOperationException(
+            "REDIS_CONNECTION must be configured outside the Development environment."));
 
 var jwtSigningKey =
     builder.Configuration["JWT_SIGNING_KEY"]
     ?? builder.Configuration["Jwt:SigningKey"]
-    ?? "local-development-signing-key-change-me-please-32-chars";
+    ?? (isDevelopment
+        ? "local-development-signing-key-change-me-please-32-chars"
+        : throw new InvalidOperationException(
+            "JWT_SIGNING_KEY must be configured outside the Development environment."));
 
 var jwtIssuer =
     builder.Configuration["JWT_ISSUER"]
