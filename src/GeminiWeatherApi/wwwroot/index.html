@@ -475,7 +475,36 @@
     }
 
     .status.success { color: var(--mint); }
-    .status.error { color: var(--danger); }
+   .status.error { color: var(--danger); }
+
+    .validation-panel {
+      display: grid;
+      gap: 8px;
+      margin: 2px 0 0;
+      padding: 12px 14px;
+      border: 1px solid rgba(255, 139, 159, 0.34);
+      border-radius: 12px;
+      color: #ffd4dc;
+      background: rgba(255, 80, 112, 0.08);
+      font-size: 12px;
+    }
+
+    .validation-panel[hidden] { display: none; }
+    .validation-panel strong { color: #ffb7c4; }
+    .validation-panel ul { margin: 0; padding-left: 18px; }
+    .validation-panel li { margin: 3px 0; }
+
+    .field-error {
+      min-height: 15px;
+      color: var(--danger);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    input.invalid, textarea.invalid {
+      border-color: rgba(255, 139, 159, 0.8);
+      box-shadow: 0 0 0 3px rgba(255, 80, 112, 0.09);
+    }
 
     .result {
       min-height: 120px;
@@ -697,21 +726,22 @@
           </div>
           <div class="demo-form">
             <div class="form-row">
-              <label>Display name<input id="displayName" value="Demo User" autocomplete="name"></label>
-              <label>Email<input id="email" value="demo@example.com" type="email" autocomplete="email"></label>
+              <label>Display name<input id="displayName" value="Demo User" autocomplete="name"><small class="field-error" id="displayNameError"></small></label>
+              <label>Email<input id="email" value="demo@example.com" type="email" autocomplete="email"><small class="field-error" id="emailError"></small></label>
             </div>
             <div class="form-row">
-              <label>Password<input id="password" value="local-password-123" type="password" autocomplete="current-password"></label>
-              <label>City<input id="city" value="Istanbul"></label>
+              <label>Password<input id="password" value="local-password-123" type="password" autocomplete="current-password"><small class="field-error" id="passwordError"></small></label>
+              <label>City<input id="city" value="Istanbul"><small class="field-error" id="cityError"></small></label>
             </div>
-            <label>Question<textarea id="question">Do I need a jacket and an umbrella today?</textarea></label>
+            <label>Question<textarea id="question">Do I need a jacket and an umbrella today?</textarea><small class="field-error" id="questionError"></small></label>
             <div class="form-actions">
               <button class="button primary" id="authButton" type="button">Create account / log in</button>
               <button class="button secondary" id="weatherButton" type="button">Get weather brief</button>
               <button class="button secondary" id="historyButton" type="button">Load history</button>
             </div>
-            <div class="status" id="status" role="status">Ready. Start by creating an account or logging in.</div>
-            <pre class="result" id="result">Your JSON response will appear here.</pre>
+           <div class="status" id="status" role="status">Ready. Start by creating an account or logging in.</div>
+            <div class="validation-panel" id="validationPanel" role="alert" hidden></div>
+           <pre class="result" id="result">Your JSON response will appear here.</pre>
           </div>
         </div>
       </section>
@@ -730,21 +760,91 @@
   <script>
     (function () {
       var state = { token: null };
-      var statusElement = document.getElementById("status");
-      var resultElement = document.getElementById("result");
+     var statusElement = document.getElementById("status");
+     var resultElement = document.getElementById("result");
+      var validationPanel = document.getElementById("validationPanel");
 
       function setStatus(message, kind) {
         statusElement.textContent = message;
         statusElement.className = "status" + (kind ? " " + kind : "");
       }
 
-      function showResult(value) {
-        resultElement.textContent = typeof value === "string"
-          ? value
-          : JSON.stringify(value, null, 2);
+     function showResult(value) {
+       resultElement.textContent = typeof value === "string"
+         ? value
+         : JSON.stringify(value, null, 2);
+     }
+
+      function clearValidation() {
+        ["displayName", "email", "password", "city", "question"].forEach(function (fieldId) {
+          var field = document.getElementById(fieldId);
+          var fieldError = document.getElementById(fieldId + "Error");
+          if (field) {
+            field.classList.remove("invalid");
+          }
+          if (fieldError) {
+            fieldError.textContent = "";
+          }
+        });
+        validationPanel.hidden = true;
+        validationPanel.replaceChildren();
       }
 
-      async function callApi(path, method, body, authenticated) {
+      function renderValidation(payload) {
+        clearValidation();
+        var messages = [];
+        var errors = payload && payload.errors ? payload.errors : {};
+
+        Object.keys(errors).forEach(function (key) {
+          var values = Array.isArray(errors[key]) ? errors[key] : [errors[key]];
+          var fieldId = key.charAt(0).toLowerCase() + key.slice(1);
+          var field = document.getElementById(fieldId);
+          var fieldError = document.getElementById(fieldId + "Error");
+          var message = values.filter(Boolean).join(" ");
+
+          if (field) {
+            field.classList.add("invalid");
+          }
+          if (fieldError) {
+            fieldError.textContent = message;
+          }
+          if (message) {
+            messages.push(key + ": " + message);
+          }
+        });
+
+        if (messages.length === 0) {
+          messages.push(payload.detail || payload.title || "Please check the highlighted fields.");
+        }
+
+        var heading = document.createElement("strong");
+        heading.textContent = "Please fix the following:";
+        var list = document.createElement("ul");
+        messages.forEach(function (message) {
+          var item = document.createElement("li");
+          item.textContent = message;
+          list.appendChild(item);
+        });
+        validationPanel.append(heading, list);
+        validationPanel.hidden = false;
+      }
+
+      function showApiError(error) {
+        var payload = error.payload || {};
+        if (payload.errors) {
+          renderValidation(payload);
+        } else {
+          clearValidation();
+        }
+        setStatus(error.message, "error");
+        showResult({
+          error: error.message,
+          status: error.status || 0,
+          validation: payload.errors || null
+        });
+      }
+
+     async function callApi(path, method, body, authenticated) {
         var headers = {};
         if (body) {
           headers["Content-Type"] = "application/json";
@@ -767,11 +867,12 @@
           data = { raw: text };
         }
 
-        if (!response.ok) {
-          var apiError = new Error(data.detail || data.title || data.raw || "Request failed.");
-          apiError.status = response.status;
-          throw apiError;
-        }
+       if (!response.ok) {
+         var apiError = new Error(data.detail || data.title || data.raw || "Request failed.");
+         apiError.status = response.status;
+          apiError.payload = data;
+         throw apiError;
+       }
         return data;
       }
 
@@ -795,9 +896,10 @@
         });
       }
 
-      document.getElementById("authButton").addEventListener("click", async function () {
-        var values = formValues();
-        setStatus("Creating account or logging in...", "");
+     document.getElementById("authButton").addEventListener("click", async function () {
+       var values = formValues();
+        clearValidation();
+       setStatus("Creating account or logging in...", "");
         try {
           var response;
           try {
@@ -817,15 +919,15 @@
             }, false);
             storeAuth(response, "Logged in. JWT token is ready in memory.");
           }
-        } catch (error) {
-          setStatus(error.message, "error");
-          showResult({ error: error.message, status: error.status || 0 });
-        }
-      });
+       } catch (error) {
+          showApiError(error);
+       }
+     });
 
-      document.getElementById("weatherButton").addEventListener("click", async function () {
-        var values = formValues();
-        if (!state.token) {
+     document.getElementById("weatherButton").addEventListener("click", async function () {
+       var values = formValues();
+        clearValidation();
+       if (!state.token) {
           setStatus("Authenticate first, then request a weather brief.", "error");
           return;
         }
@@ -837,14 +939,14 @@
           }, true);
           setStatus(response.cached ? "Returned from Redis cache." : "Live Gemini response saved to history.", "success");
           showResult(response);
-        } catch (error) {
-          setStatus(error.message, "error");
-          showResult({ error: error.message, status: error.status || 0 });
-        }
-      });
+       } catch (error) {
+          showApiError(error);
+       }
+     });
 
-      document.getElementById("historyButton").addEventListener("click", async function () {
-        if (!state.token) {
+     document.getElementById("historyButton").addEventListener("click", async function () {
+        clearValidation();
+       if (!state.token) {
           setStatus("Authenticate first, then load history.", "error");
           return;
         }
@@ -853,11 +955,10 @@
           var response = await callApi("/api/history?limit=20", "GET", null, true);
           setStatus("History loaded.", "success");
           showResult(response);
-        } catch (error) {
-          setStatus(error.message, "error");
-          showResult({ error: error.message, status: error.status || 0 });
-        }
-      });
+       } catch (error) {
+          showApiError(error);
+       }
+     });
     }());
   </script>
 </body>
